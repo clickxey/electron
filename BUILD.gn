@@ -1209,9 +1209,13 @@ if (current_toolchain == default_toolchain) {
   }
 }
 
-# Resource allowlisting (slimmed locale paks + the completeness check).
+# Resource allowlisting (slimmed locale paks + the completeness check). On
+# Windows the allowlist comes from electron.exe.pdb, which in a component build
+# only covers the executable itself and not the DLLs the rest of the code lives
+# in, so it is limited to non-component builds there (as Chrome does).
 electron_use_resource_allowlist =
-    enable_resource_allowlist_generation && (is_linux || is_mac || is_win)
+    enable_resource_allowlist_generation &&
+    (is_linux || is_mac || (is_win && !is_component_build))
 
 if (electron_use_resource_allowlist) {
   # The list of grit resource IDs actually referenced by the link inputs of
