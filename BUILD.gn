@@ -2047,6 +2047,7 @@ dist_zip("electron_dist_zip") {
         ":strip_electron_binary",
         ":strip_libffmpeg_shlib",
         ":strip_libvk_swiftshader_shlib",
+        ":strip_libvulkan_shlib",
       ]
     }
 
@@ -2337,6 +2338,18 @@ if (is_linux && is_official_build) {
     symbol_output = "$root_out_dir/debug/libvk_swiftshader.so.debug"
     compress_debug_sections = true
     deps = [ "//third_party/swiftshader/src/Vulkan:swiftshader_libvulkan" ]
+  }
+
+  # The Vulkan loader ships next to the executable but, unlike every other
+  # shared library in dist.zip, used to keep its full DWARF debug info and
+  # symbol table (~1.8 MB of the ~2.5 MB file on x64). Chrome strips it the
+  # same way for its Linux installer (strip_libvulkan_shlib in
+  # //chrome/installer/linux).
+  strip_binary("strip_libvulkan_shlib") {
+    binary_input = "$root_out_dir/libvulkan.so.1"
+    symbol_output = "$root_out_dir/debug/libvulkan.so.1.debug"
+    compress_debug_sections = true
+    deps = [ "//third_party/vulkan-loader/src:libvulkan" ]
   }
 
   strip_binary("strip_mksnapshot_binary") {
