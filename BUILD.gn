@@ -1209,10 +1209,9 @@ if (current_toolchain == default_toolchain) {
   }
 }
 
-# Resource allowlisting (slimmed locale paks + the completeness check) is
-# wired up for Linux and macOS: Windows still needs PDB-based extraction.
+# Resource allowlisting (slimmed locale paks + the completeness check).
 electron_use_resource_allowlist =
-    enable_resource_allowlist_generation && (is_linux || is_mac)
+    enable_resource_allowlist_generation && (is_linux || is_mac || is_win)
 
 if (electron_use_resource_allowlist) {
   # The list of grit resource IDs actually referenced by the link inputs of
@@ -1224,15 +1223,23 @@ if (electron_use_resource_allowlist) {
       "$target_gen_dir/electron_resource_allowlist.txt"
 
   # On macOS this target is defined with the framework below.
-  if (!is_mac) {
-    # TODO: on Windows this should extract from electron.exe.pdb instead of the
-    # inputs pseudo-link (and the executable must then stop depending on
-    # :packed_resources to avoid a dependency cycle).
+  if (is_linux) {
     generate_resource_allowlist("electron_resource_allowlist") {
       deps = [ ":electron_resource_allowlist_inputs" ]
       inputs = [
         "$root_out_dir/libelectron_resource_allowlist_inputs$shlib_extension",
       ]
+      output = electron_resource_allowlist_file
+    }
+  } else if (is_win) {
+    # Read the markers from the linked executable's PDB (its publics stream),
+    # the same way Chrome derives its allowlist from chrome.dll.pdb. PDBs are
+    # always produced on Windows (/DEBUG is passed even at symbol_level=0).
+    # To avoid a dependency cycle, :electron_app does not depend on
+    # :packed_resources on Windows; group("electron") and the dist zip do.
+    generate_resource_allowlist("electron_resource_allowlist") {
+      deps = [ ":electron_app" ]
+      inputs = [ "$root_out_dir/$electron_project_name.exe.pdb" ]
       output = electron_resource_allowlist_file
     }
   }
@@ -1799,7 +1806,7 @@ if (is_mac) {
     "//ui/strings",
   ]
 
-  if (electron_use_resource_allowlist) {
+  if (electron_use_resource_allowlist && is_linux) {
     # Pseudo-link sharing the executable's link inputs: --collect-inputs-only
     # makes gcc_solink_wrapper.py skip the real link and write the list of
     # link inputs instead. generate_resource_allowlist greps those inputs for
@@ -1835,7 +1842,15 @@ if (is_mac) {
       ]
     }
     include_dirs = [ "." ]
-    deps = electron_app_link_deps + [ ":packed_resources" ]
+    deps = electron_app_link_deps
+
+    # On Windows the locale paks are repacked with an allowlist read from this
+    # executable's PDB, so depending on them here would be a cycle. The paks
+    # are still listed in `data` below; group("electron") and the dist zip
+    # make sure they are built.
+    if (!(is_win && electron_use_resource_allowlist)) {
+      deps += [ ":packed_resources" ]
+    }
 
     data = []
     data_deps = []
@@ -2055,6 +2070,8 @@ dist_zip("electron_dist_zip") {
   }
   deps = data_deps
   if (electron_use_resource_allowlist) {
+    # The check depends on :packed_resources, which :electron_app does not
+    # pull in on Windows.
     build_deps = [ ":electron_resource_allowlist_check" ]
   }
   outputs = [ "$root_build_dir/dist.zip" ]
@@ -2200,6 +2217,10 @@ if (is_debug || dcheck_always_on) {
 
 group("electron") {
   public_deps = [ ":electron_app" ]
+  if (is_win && electron_use_resource_allowlist) {
+    # See the comment on :electron_app's deps.
+    public_deps += [ ":packed_resources" ]
+  }
   if (is_debug || dcheck_always_on) {
     data_deps = [ ":v8_code_cache_spec_assets" ]
   }
