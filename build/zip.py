@@ -85,7 +85,15 @@ def skip_path(dep, dist_zip, target_cpu):
       and "snapshot_blob.bin" in candidates
     ) or
     # electron_xcache links V8 but is always handed the target's blob.
-    (dist_zip == "xcache.zip" and "snapshot_blob.bin" in candidates)
+    (dist_zip == "xcache.zip" and "snapshot_blob.bin" in candidates) or
+    # Every process of the shipped app loads v8_context_snapshot.bin instead
+    # (gin::V8SnapshotFileType::kWithAdditionalContext, see
+    # GetSnapshotType() in content_main_runner_impl.cc and
+    # shell/app/node_main.cc). snapshot_blob.bin is only a runtime dep of
+    # //v8 for the build-time snapshot tools, and is already absent from the
+    # macOS bundle; Chrome likewise only ships it in builds without
+    # v8_context_snapshot.bin.
+    (dist_zip == "dist.zip" and dep.removeprefix("./") == "snapshot_blob.bin")
   )
   if should_skip and os.environ.get('ELECTRON_DEBUG_ZIP_SKIP') == '1':
     print("Skipping {}".format(dep))

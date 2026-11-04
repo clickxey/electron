@@ -63,6 +63,44 @@ template("electron_repack_percent") {
 }
 
 template("electron_extra_paks") {
+  _repack_target_name = target_name
+  _browser_resources_pak = "$target_gen_dir/${target_name}_browser_resources.pak"
+
+  # browser_resources.pak with the resources of Chrome-only UI that Electron
+  # never shows left out. See build/strip_pak_resources.py.
+  action("${target_name}_browser_resources") {
+    visibility = [ ":$_repack_target_name" ]
+    script = "//electron/build/strip_pak_resources.py"
+    _input = "$root_gen_dir/chrome/browser_resources.pak"
+    _header = "$root_gen_dir/chrome/grit/browser_resources.h"
+    inputs = [
+      _input,
+      _header,
+    ]
+    outputs = [ _browser_resources_pak ]
+    args = [
+      "--input",
+      rebase_path(_input, root_build_dir),
+      "--header",
+      rebase_path(_header, root_build_dir),
+      "--output",
+      rebase_path(_browser_resources_pak, root_build_dir),
+      "--grit-dir",
+      rebase_path("//tools/grit", root_build_dir),
+
+      # Sounds for Chrome's first-run intro (chrome://intro), ~4.8 MB of
+      # FLAC that does not compress further in the dist zip.
+      "--exclude",
+      "IDR_INTRO_SOUND_*",
+
+      # Backgrounds of Chrome's FedCM account chooser dialog
+      # (//chrome/browser/ui/views/webid), which Electron does not have.
+      "--exclude",
+      "IDR_WEBID_MODAL_ICON_BACKGROUND_*",
+    ]
+    deps = [ "//chrome/browser:resources" ]
+  }
+
   repack(target_name) {
     forward_variables_from(invoker,
                            [
@@ -73,7 +111,6 @@ template("electron_extra_paks") {
     output = "${invoker.output_dir}/resources.pak"
     sources = [
       "$root_gen_dir/chrome/accessibility_resources.pak",
-      "$root_gen_dir/chrome/browser_resources.pak",
       "$root_gen_dir/chrome/common_resources.pak",
       "$root_gen_dir/components/components_resources.pak",
       "$root_gen_dir/content/browser/resources/media/media_internals_resources.pak",
@@ -88,8 +125,10 @@ template("electron_extra_paks") {
       "$root_gen_dir/third_party/blink/public/resources/inspector_overlay_resources.pak",
       "$root_gen_dir/third_party/blink/public/strings/permission_element_generated_strings.pak",
       "$target_gen_dir/electron_resources.pak",
+      _browser_resources_pak,
     ]
     deps = [
+      ":${target_name}_browser_resources",
       "//chrome/browser:resources",
       "//chrome/browser/resources/accessibility:resources",
       "//chrome/common:resources",
