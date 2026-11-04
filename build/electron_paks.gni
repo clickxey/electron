@@ -92,6 +92,11 @@ template("electron_extra_paks") {
       # FLAC that does not compress further in the dist zip.
       "--exclude",
       "IDR_INTRO_SOUND_*",
+
+      # Backgrounds of Chrome's FedCM account chooser dialog
+      # (//chrome/browser/ui/views/webid), which Electron does not have.
+      "--exclude",
+      "IDR_WEBID_MODAL_ICON_BACKGROUND_*",
     ]
     deps = [ "//chrome/browser:resources" ]
   }
